@@ -2,15 +2,15 @@
 
 ## Working Title
 
-**Grounded Probabilistic Templates for Evidence-Conditioned Financial Decision Models**
+**Risk-Calibrated Evidence Templates for Distilling Small Financial Decision Models**
 
 ## Draft Abstract
 
-Small language models are attractive for financial decision support because they are cheaper, faster, and easier to deploy than frontier-scale models, but they often fail when answers depend on noisy external evidence such as SEC filings, financial tables, and time-sensitive disclosures. Existing retrieval-augmented and distillation methods typically provide raw context or transfer teacher answers, leaving unclear whether the student has learned to decide from evidence or merely imitate surface patterns. We introduce **GROUNDFIN**, a framework for converting raw financial evidence into reusable **grounded probabilistic templates** that decompose a decision into task variables, evidence units, support probabilities, computation traces, answer distributions, calibrated confidence, and abstention probability. Formally, GROUNDFIN factors evidence-conditioned decision-making as `P(y | x, E) = sum_z P(y | x, z) P(z | x, E)`, where `z` is a compact probabilistic evidence template derived from raw evidence `E`. This enables repeatable supervision and distillation from larger teacher models into smaller students without relying on ad hoc prompt engineering. On FinanceBench-style financial QA, our initial probes show that a 0.5B instruction model fails on raw gold evidence but succeeds on concise grounded and counterfactual evidence, suggesting that the bottleneck is evidence usability rather than evidence access alone. We propose benchmark splits for raw evidence, compressed evidence, missing evidence, and counterfactual evidence, and evaluate whether template-conditioned distillation improves accuracy, calibration, abstention, and robustness over raw retrieval, answer-only distillation, and rationale distillation. GROUNDFIN aims to show that structured grounding can close a substantial portion of the teacher-student gap in high-stakes evidence-dependent reasoning.
+Small language models are attractive for financial decision support because they are cheaper and easier to deploy than frontier-scale models, but they often fail when decisions depend on long, noisy evidence such as SEC filings, financial tables, and time-sensitive disclosures. Recent structured-trace and RAG-distillation methods improve small-model accuracy by transferring teacher-generated rationales, structured records, or retrieved evidence, but they do not directly optimize the reliability properties required in high-stakes decision settings: evidence support, calibrated confidence, abstention under insufficient evidence, and robustness to counterfactual evidence. We introduce **GROUNDFIN**, a framework for distilling small financial decision models with **risk-calibrated evidence templates**. Each template represents a decision through task variables, evidence units, support probabilities, computation traces, answer distributions, calibrated confidence, and abstention probability. Unlike deterministic structured traces, these templates make uncertainty and evidence sufficiency first-class supervision targets. GROUNDFIN evaluates models under a controlled evidence-condition benchmark with raw evidence, length-matched summaries, deterministic structured traces, probabilistic templates, missing evidence, and counterfactual evidence. Our central hypothesis is that probabilistic-template distillation can match or improve the accuracy of structured-trace distillation while substantially improving abstention, calibration, and counterfactual evidence-following. Initial FinanceBench probes show that a 0.5B instruction model fails on raw gold evidence but succeeds on concise grounded and counterfactual evidence, motivating the claim that small-model failures are partly evidence-representation failures rather than pure capacity failures. The paper’s main contribution is not another financial QA benchmark or compressed prompt, but a reliability-oriented distillation target for teaching small models when to answer, when to abstain, and how strongly evidence supports a financial decision.
 
 ## One-Sentence Novelty Claim
 
-GROUNDFIN is not another finance QA benchmark or RAG pipeline; it is a repeatable probabilistic template-and-distillation framework for teaching small models to transform noisy financial evidence into calibrated, abstention-aware decisions.
+GROUNDFIN extends structured-trace and RAG distillation by making evidence support, calibrated confidence, and abstention explicit supervised fields, then testing whether these risk-calibrated templates improve small-model reliability under missing and counterfactual evidence.
 
 ## Closest Prior-Art Threats
 
@@ -37,6 +37,42 @@ Threat:
 Response:
 
 > We need ablations showing rationale-only distillation is weaker than probabilistic templates with evidence support, answer distribution, calibration, and abstention.
+
+### LiteCoST / Chain-of-Structured-Thought
+
+LiteCoST is the strongest structured-trace prior art. It uses Chain-of-Structured-Thought templates to produce auditable supervision for SLMs on long-document QA, including financial settings.
+
+Threat:
+
+> Reviewers may say our templates are simply CoST with finance-specific packaging.
+
+Response:
+
+> We must compare against deterministic structured traces and show that first-class probabilistic fields improve calibration, abstention, and counterfactual robustness, not merely answer accuracy.
+
+### DRAG / Evidence and Graph Distillation
+
+DRAG distills RAG behavior into SLMs using ranked evidence and knowledge-graph distillation to reduce hallucination.
+
+Threat:
+
+> Reviewers may say our work is DRAG applied to FinanceBench.
+
+Response:
+
+> We need to show that support probabilities, answer distributions, and abstention supervision add reliability improvements beyond evidence alignment or graph/ranked-evidence distillation.
+
+### Counterfactual Risk Control for RAG
+
+RC-RAG and related counterfactual prompting work use counterfactual retrieval/use perturbations to estimate confidence and improve abstention.
+
+Threat:
+
+> Reviewers may say the risk-control and counterfactual pieces are already known.
+
+Response:
+
+> Our distinct claim must be distillation into small models through risk-calibrated templates, not inference-time counterfactual prompting alone.
 
 ### Faithful / Context-Faithful RAG
 

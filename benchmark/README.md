@@ -28,6 +28,22 @@ When the code changes:
 
 This avoids repeatedly replacing uploaded notebooks.
 
+## Open-Model Baseline
+
+If you do not have an API key, use the notebook section called **Open-Model Baseline**. It loads a small Hugging Face instruct model and runs the same question-only versus gold-evidence comparison.
+
+Recommended runtime:
+
+```text
+Runtime -> Change runtime type -> T4 GPU
+```
+
+Default model:
+
+```text
+Qwen/Qwen2.5-0.5B-Instruct
+```
+
 ## Immediate Pilot Goal
 
 Run enough examples to answer:

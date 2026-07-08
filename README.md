@@ -81,6 +81,24 @@ benchmark/financebench_pilot.py
 
 The pilot loads `PatronusAI/financebench`, inspects the open FinanceBench subset, creates evidence-conditioned prompts, runs optional API baselines, and identifies candidate examples for counterfactual benchmark construction.
 
+## No API Key Baseline
+
+The runner notebook includes an open-model baseline that runs directly in Colab with Hugging Face models. No OpenAI API key is required.
+
+Recommended Colab runtime:
+
+```text
+Runtime -> Change runtime type -> T4 GPU
+```
+
+Default pilot model:
+
+```text
+Qwen/Qwen2.5-0.5B-Instruct
+```
+
+This is intentionally small so the first baseline runs quickly. After the pipeline works, compare stronger students such as `Qwen/Qwen2.5-1.5B-Instruct` or `Qwen/Qwen2.5-3B-Instruct`.
+
 ## Immediate Next Steps
 
 1. Run the FinanceBench Colab pilot on 20 examples.

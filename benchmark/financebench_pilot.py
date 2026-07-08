@@ -48,15 +48,18 @@ def flatten_evidence(evidence):
     return "\n\n".join(parts)
 
 
-def make_prompt(row, with_evidence=True):
+def make_prompt(row, with_evidence=True, max_evidence_chars=None):
     if with_evidence:
+        evidence_text = row["evidence_text"]
+        if max_evidence_chars is not None and len(evidence_text) > max_evidence_chars:
+            evidence_text = evidence_text[:max_evidence_chars] + "\n\n[TRUNCATED]"
         return f"""{SYSTEM_INSTRUCTION}
 
 Question:
 {row["question"]}
 
 Evidence:
-{row["evidence_text"]}
+{evidence_text}
 
 Return JSON with keys: answer, confidence, evidence_support, short_rationale."""
 
@@ -188,6 +191,88 @@ def run_openai_baseline(df, n_examples=20, model="gpt-4.1-mini", random_state=7)
 
     results = pd.DataFrame(rows)
     summary = results.groupby("condition")["weak_match"].mean().to_frame(
+        "weak_accuracy"
+    )
+    return results, summary
+
+
+def load_hf_generator(model_id="Qwen/Qwen2.5-0.5B-Instruct", max_new_tokens=192):
+    import torch
+    from transformers import AutoModelForCausalLM, AutoTokenizer, pipeline
+
+    tokenizer = AutoTokenizer.from_pretrained(model_id)
+    dtype = torch.float16 if torch.cuda.is_available() else torch.float32
+    model = AutoModelForCausalLM.from_pretrained(
+        model_id,
+        device_map="auto",
+        torch_dtype=dtype,
+    )
+    return pipeline(
+        "text-generation",
+        model=model,
+        tokenizer=tokenizer,
+        max_new_tokens=max_new_tokens,
+        do_sample=False,
+        return_full_text=False,
+    )
+
+
+def call_hf_generator(generator, prompt):
+    messages = [{"role": "user", "content": prompt}]
+    tokenizer = generator.tokenizer
+    if hasattr(tokenizer, "apply_chat_template") and tokenizer.chat_template:
+        rendered = tokenizer.apply_chat_template(
+            messages,
+            tokenize=False,
+            add_generation_prompt=True,
+        )
+    else:
+        rendered = prompt
+    out = generator(rendered)
+    return out[0]["generated_text"].strip()
+
+
+def run_hf_baseline(
+    df,
+    n_examples=10,
+    model_id="Qwen/Qwen2.5-0.5B-Instruct",
+    random_state=7,
+    max_new_tokens=192,
+    max_evidence_chars=6000,
+):
+    generator = load_hf_generator(model_id=model_id, max_new_tokens=max_new_tokens)
+    rows = []
+    pilot = df.sample(min(n_examples, len(df)), random_state=random_state).reset_index(
+        drop=True
+    )
+
+    for _, row in tqdm(pilot.iterrows(), total=len(pilot)):
+        for condition, with_evidence in [
+            ("question_only", False),
+            ("with_gold_evidence", True),
+        ]:
+            pred = call_hf_generator(
+                generator,
+                make_prompt(
+                    row,
+                    with_evidence=with_evidence,
+                    max_evidence_chars=max_evidence_chars,
+                ),
+            )
+            rows.append(
+                {
+                    "financebench_id": row["financebench_id"],
+                    "condition": condition,
+                    "model_id": model_id,
+                    "question": row["question"],
+                    "gold_answer": row["answer"],
+                    "prediction": pred,
+                    "weak_match": weak_answer_match(pred, row["answer"]),
+                }
+            )
+
+    results = pd.DataFrame(rows)
+    summary = results.groupby(["model_id", "condition"])["weak_match"].mean().to_frame(
         "weak_accuracy"
     )
     return results, summary

@@ -4,3 +4,6 @@ numpy
 scikit-learn
 tqdm
 openai
+transformers
+accelerate
+sentencepiece

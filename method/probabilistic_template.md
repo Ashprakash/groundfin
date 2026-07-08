@@ -71,6 +71,8 @@ The teacher estimates or supervises `P(z | x, E)`. The student learns `P(y | x, 
 
 Uses gold answer and/or FinanceBench justification. This tests the upper bound for a compact grounded representation.
 
+Oracle templates are not allowed for the main method claim. They are used only for upper-bound analysis, debugging, and estimating how much accuracy is available when evidence representation is near-perfect.
+
 ### Rule-Assisted Template
 
 Uses deterministic parsing, numeric extraction, entity/period matching, and simple formula rules.
@@ -78,6 +80,8 @@ Uses deterministic parsing, numeric extraction, entity/period matching, and simp
 ### Teacher Template
 
 Uses a larger model to generate the template from raw evidence. This is the primary distillation source.
+
+Teacher templates must be generated from the question and raw evidence only. If the teacher sees the gold answer, the template must be labeled as oracle.
 
 ### Student Template
 
@@ -90,6 +94,19 @@ The student learns to consume or produce the template. This is the end method ta
 3. Does the template improve abstention when evidence is missing?
 4. Does the template improve calibration?
 5. Can the template be generated repeatably without gold leakage?
+
+## Required Controls
+
+To show that the template is not just prompt engineering or summarization, evaluate against:
+
+1. raw evidence,
+2. truncated raw evidence with matched token budget,
+3. extractive summary with matched token budget,
+4. rationale-only compact evidence,
+5. template without probabilities,
+6. full probabilistic template.
+
+The full template should improve not only answer accuracy, but also abstention and calibration.
 
 ## Paper Claim
 

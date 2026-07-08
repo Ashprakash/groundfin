@@ -163,6 +163,28 @@ Strengthening requirement:
 6. Oracle-template upper bound vs teacher-generated template.
 7. Manual validation subset.
 
+## Protocol Updates From This Review
+
+The experiment protocol has been strengthened with the following required controls:
+
+1. **No-leakage labels**
+   All template results must be labeled as `oracle_template`, `teacher_template`, `rule_template`, or `student_template`. Main claims cannot rely on oracle templates.
+
+2. **Length-matched baselines**
+   Template results must beat compact summaries and truncated evidence with similar token budgets.
+
+3. **Rationale baselines**
+   Template distillation must be compared against answer-only, rationale-only, and evidence-span distillation.
+
+4. **Probability validation**
+   Support probabilities, confidence, and abstention probabilities must be evaluated with calibration and selective-risk metrics.
+
+5. **Human audit**
+   A stratified subset must be manually labeled for correctness, unsupported answers, wrong evidence, and wrong computation.
+
+6. **Separate upper-bound and deployment-like claims**
+   Oracle-template results can show what is possible, but paper claims about the method must use templates generated from raw evidence without gold answers.
+
 ## Strongest Paper Framing
 
 The strongest version of the paper is:

@@ -228,19 +228,29 @@ def build_grounding_probe(df, n_examples=5, random_state=7):
 
         justification = row.get("justification", "")
         if isinstance(justification, str) and justification.strip():
-            rows.append(
-                {
-                    **common,
-                    "condition": "evidence_compressed",
-                    "target_answer": row["answer"],
-                    "expected_behavior": "answer",
-                    "evidence_text": (
-                        "Compact evidence bundle:\n"
-                        f"{justification.strip()}\n"
-                        "Use this compact evidence to answer the question."
-                    ),
-                }
+            compressed_evidence = justification.strip()
+            compression_source = "financebench_justification"
+        else:
+            compressed_evidence = (
+                f"The answer to the question is {row['answer']}. "
+                "This is an oracle compact evidence proxy for debugging."
             )
+            compression_source = "oracle_answer_fallback"
+
+        rows.append(
+            {
+                **common,
+                "condition": "evidence_compressed",
+                "target_answer": row["answer"],
+                "expected_behavior": "answer",
+                "compression_source": compression_source,
+                "evidence_text": (
+                    "Compact evidence bundle:\n"
+                    f"{compressed_evidence}\n"
+                    "Use this compact evidence to answer the question."
+                ),
+            }
+        )
 
         rows.append(
             {

@@ -57,6 +57,10 @@ Experiment roadmap:
 
 [benchmark/experiment_stages.md](benchmark/experiment_stages.md)
 
+Core method schema:
+
+[method/probabilistic_template.md](method/probabilistic_template.md)
+
 ## Current Pilot
 
 The recommended Colab entry point is:

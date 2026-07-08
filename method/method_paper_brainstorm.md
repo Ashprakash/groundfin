@@ -2,7 +2,7 @@
 
 Working title:
 
-**Grounded Probabilistic Distillation for Evidence-Conditioned Decision Models**
+**Grounded Probabilistic Templates for Evidence-Conditioned Decision Models**
 
 Target venue:
 
@@ -18,7 +18,7 @@ The research problem:
 
 ## Central Hypothesis
 
-Grounded probabilistic supervision can recover more of the teacher-student performance gap than answer-only distillation or naive RAG, especially on counterfactual and unseen evidence-conditioned tasks where memorized knowledge is unreliable.
+Grounded probabilistic templates can recover more of the teacher-student performance gap than answer-only distillation or naive RAG, especially on counterfactual and unseen evidence-conditioned tasks where memorized knowledge is unreliable.
 
 Expected result pattern:
 
@@ -29,22 +29,20 @@ Expected result pattern:
 
 ## Key Scientific Claim
 
-The method separates two sources of prediction:
+The method separates raw evidence interpretation from answer prediction:
 
 ```text
-Parametric decision:          P(y | x)
-Grounded decision:            P(y | x, e)
-Grounded distilled decision:  P(y | x, e, t)
+P(y | x, E) = sum_z P(y | x, z) P(z | x, E)
 ```
 
 where:
 
 - `x` is the task/question,
-- `e` is the evidence bundle,
-- `t` is teacher supervision,
+- `E` is raw evidence,
+- `z` is the grounded probabilistic template,
 - `y` is the answer or decision.
 
-The goal is to teach the student to rely on `e` when the answer depends on grounded external knowledge, and to abstain when `e` is missing, stale, or contradictory.
+The goal is to teach the student to rely on a repeatable template `z` when the answer depends on grounded external knowledge, and to abstain when `z` indicates missing, stale, or contradictory evidence.
 
 ## Proposed Method
 
@@ -57,7 +55,7 @@ Name candidates:
 
 Current favorite:
 
-**Grounded Probabilistic Distillation (GPD)**
+**Grounded Probabilistic Templates (GP-Template) + Grounded Probabilistic Distillation (GPD)**
 
 Teacher produces a structured supervision bundle:
 

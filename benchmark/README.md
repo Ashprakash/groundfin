@@ -2,6 +2,10 @@
 
 This folder contains artifacts for the FinanceBench pilot and the proposed FinGKD-Bench benchmark.
 
+The staged experiment plan is here:
+
+- `experiment_stages.md`
+
 ## Current Notebooks
 
 - `groundfin_colab_runner.ipynb`: recommended stable Colab entry point.

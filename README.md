@@ -53,6 +53,10 @@ method/      Grounded probabilistic distillation theory and method notes
 paper/       Paper outlines, related work, figures, and drafts
 ```
 
+Experiment roadmap:
+
+[benchmark/experiment_stages.md](benchmark/experiment_stages.md)
+
 ## Current Pilot
 
 The recommended Colab entry point is:
@@ -101,9 +105,9 @@ This is intentionally small so the first baseline runs quickly. After the pipeli
 
 ## Immediate Next Steps
 
-1. Run the FinanceBench Colab pilot on 20 examples.
+1. Rerun Stage 0 with parsed-answer scoring.
 2. Compare question-only versus gold-evidence prompting.
-3. Manually inspect failures.
-4. Build the first 30-50 FinGKD counterfactual examples.
+3. Increase to 20 examples if the scoring is stable.
+4. Add missing-evidence and counterfactual-evidence variants.
 5. Generate teacher supervision bundles.
-6. Run first student-model baseline.
+6. Run first grounded-distillation baseline.

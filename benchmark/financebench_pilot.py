@@ -235,6 +235,7 @@ def run_openai_baseline(df, n_examples=20, model="gpt-4.1-mini", random_state=7)
                     "question": row["question"],
                     "gold_answer": row["answer"],
                     "prediction": pred,
+                    "weak_match": scores["weak_match_answer"],
                     **scores,
                 }
             )
@@ -307,6 +308,7 @@ def run_hf_baseline(
                     max_evidence_chars=max_evidence_chars,
                 ),
             )
+            scores = score_prediction(pred, row["answer"])
             rows.append(
                 {
                     "financebench_id": row["financebench_id"],
@@ -315,7 +317,8 @@ def run_hf_baseline(
                     "question": row["question"],
                     "gold_answer": row["answer"],
                     "prediction": pred,
-                    **score_prediction(pred, row["answer"]),
+                    "weak_match": scores["weak_match_answer"],
+                    **scores,
                 }
             )
 

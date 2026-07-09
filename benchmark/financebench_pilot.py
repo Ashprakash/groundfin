@@ -580,9 +580,7 @@ def build_rule_template(row, include_probabilities=True, max_units=6):
         "computation": {
             "formula": "not_provided",
             "inputs": {"candidate_values_from_evidence": candidates},
-            "result": "TO_BE_DETERMINED",
         },
-        "answer": "TO_BE_DETERMINED",
     }
 
     if include_probabilities:
@@ -689,15 +687,19 @@ def _deployment_payload(row, condition, max_evidence_chars):
         return (
             "Grounded evidence template without probabilities:\n"
             f"{json.dumps(template, ensure_ascii=False, indent=2)}\n"
-            "Fill the answer using the evidence_units."
+            "The template does NOT contain the answer. Read the evidence_units and "
+            "candidate_values_from_evidence, compute the answer yourself, and put the "
+            "computed value in the answer field."
         )
     if condition == "risk_calibrated_template":
         template = build_rule_template(row, include_probabilities=True)
         return (
             "Risk-calibrated evidence template:\n"
             f"{json.dumps(template, ensure_ascii=False, indent=2)}\n"
-            "Fill the answer using the evidence_units. Your confidence should "
-            "reflect the support_probability of the evidence and the abstain_probability."
+            "The template does NOT contain the answer. Read the evidence_units and "
+            "candidate_values_from_evidence, compute the answer yourself, and put the "
+            "computed value in the answer field. Your confidence should reflect the "
+            "support_probability of the evidence and the abstain_probability."
         )
     raise ValueError(f"Unknown deployment condition: {condition}")
 

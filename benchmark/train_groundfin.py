@@ -391,50 +391,100 @@ def free_gpu():
         pass
 
 
-def run_sft(
-    train_df,
-    variant="answer_template_abstain",
-    model_id="Qwen/Qwen2.5-0.5B-Instruct",
-    output_dir=None,
-    epochs=2,
-    lr=2e-4,
-    batch_size=1,
-    grad_accum=16,
-    max_seq_len=1024,
-    max_evidence_chars=2500,
-    seed=7,
-    examples=None,
-):
+def gpu_memory():
+    """Return (free_gb, total_gb, device_name) or (None, None, None) on CPU."""
+    try:
+        import torch
+
+        if not torch.cuda.is_available():
+            return None, None, None
+        free_b, total_b = torch.cuda.mem_get_info()
+        return free_b / 1e9, total_b / 1e9, torch.cuda.get_device_name(0)
+    except Exception:
+        return None, None, None
+
+
+def print_env():
+    """Report the runtime so config decisions are visible and debuggable."""
+    import platform
+
+    info = {"python": platform.python_version()}
+    for mod in ("torch", "transformers", "trl", "peft", "bitsandbytes", "datasets"):
+        try:
+            info[mod] = __import__(mod).__version__
+        except Exception:
+            info[mod] = "not installed"
+    free_gb, total_gb, name = gpu_memory()
+    if name:
+        info["gpu"] = f"{name} ({free_gb:.1f} GB free / {total_gb:.1f} GB)"
+    else:
+        info["gpu"] = "none (CPU)"
+    print("=== ENVIRONMENT ===")
+    for k, v in info.items():
+        print(f"  {k:14s} {v}")
+    return info
+
+
+def _model_billions(model_id):
+    m = re.search(r"(\d+(?:\.\d+)?)\s*[bB]\b", model_id)
+    return float(m.group(1)) if m else 0.5
+
+
+def recommended_sft_config(model_id, free_gb=None):
+    """Pick batch/seq/quantization from the model size and free VRAM.
+
+    Conservative on purpose: the OOM-retry loop in run_sft will shrink further
+    if these still do not fit. Returns a dict of training knobs.
+    """
+    if free_gb is None:
+        free_gb, _, _ = gpu_memory()
+    size = _model_billions(model_id)
+    load_in_4bit = pilot.auto_4bit(model_id) or size >= 3
+
+    if free_gb is None:  # CPU fallback (tiny, just so it runs)
+        batch, seq, ev = 1, 512, 1200
+    elif free_gb >= 30 and size < 3:
+        batch, seq, ev = 4, 1536, 3000
+    elif free_gb >= 12:
+        batch, seq, ev = (2, 1024, 2500) if size < 3 else (1, 1024, 2500)
+    elif free_gb >= 7:
+        batch, seq, ev = 1, 1024, 2000
+    elif free_gb >= 4:
+        batch, seq, ev = 1, 768, 1500
+    else:
+        batch, seq, ev = 1, 512, 1200
+
+    grad_accum = max(1, 16 // batch)
+    return {
+        "batch_size": batch,
+        "grad_accum": grad_accum,
+        "max_seq_len": seq,
+        "max_evidence_chars": ev,
+        "load_in_4bit": load_in_4bit,
+    }
+
+
+def _is_oom(err):
+    try:
+        import torch
+
+        if isinstance(err, torch.cuda.OutOfMemoryError):
+            return True
+    except Exception:
+        pass
+    return "out of memory" in str(err).lower()
+
+
+def _sft_once(dataset, model_id, output_dir, tokenizer, *, epochs, lr, batch_size,
+              grad_accum, max_seq_len, load_in_4bit, seed):
     import torch
-    from datasets import Dataset
     from peft import LoraConfig
-    from transformers import AutoModelForCausalLM, AutoTokenizer
+    from transformers import AutoModelForCausalLM
     from trl import SFTConfig, SFTTrainer
-
-    free_gpu()
-    output_dir = output_dir or f"groundfin_sft_{variant}_{model_id.split('/')[-1]}"
-    tokenizer = AutoTokenizer.from_pretrained(model_id)
-    if tokenizer.pad_token is None:
-        tokenizer.pad_token = tokenizer.eos_token
-
-    # `examples` lets the caller pass a precomputed set (e.g. teacher-distilled
-    # targets from generate_teacher_targets); otherwise build from the variant.
-    if examples is None:
-        examples = build_sft_examples(
-            train_df, variant=variant, max_evidence_chars=max_evidence_chars, seed=seed
-        )
-    leak = audit_sft_leakage(examples)
-    if len(leak):
-        print(f"[warn] {len(leak)} supported prompts contain the target answer; inspect audit_sft_leakage output.")
-    texts = [
-        _to_chat_text(tokenizer, p, c)
-        for p, c in zip(examples["prompt"], examples["completion"])
-    ]
-    dataset = Dataset.from_dict({"text": texts})
 
     dtype = torch.float16 if torch.cuda.is_available() else torch.float32
     load_kwargs = {"torch_dtype": dtype, "device_map": "auto"}
-    if pilot.auto_4bit(model_id) and torch.cuda.is_available():
+    if load_in_4bit and torch.cuda.is_available():
         from transformers import BitsAndBytesConfig
 
         load_kwargs["quantization_config"] = BitsAndBytesConfig(
@@ -448,7 +498,6 @@ def run_sft(
         r=16, lora_alpha=32, lora_dropout=0.05, bias="none", task_type="CAUSAL_LM",
         target_modules=["q_proj", "k_proj", "v_proj", "o_proj"],
     )
-    # 8-bit paged optimizer when bitsandbytes is available; keeps optimizer state small.
     try:
         import bitsandbytes  # noqa: F401
 
@@ -478,8 +527,89 @@ def run_sft(
     trainer.train()
     trainer.save_model(output_dir)
     tokenizer.save_pretrained(output_dir)
-    print(f"Saved SFT adapter to {output_dir} (n_examples={len(examples)}).")
-    return output_dir
+    del trainer, model
+    free_gpu()
+
+
+def run_sft(
+    train_df,
+    variant="answer_template_abstain",
+    model_id="Qwen/Qwen2.5-0.5B-Instruct",
+    output_dir=None,
+    epochs=2,
+    lr=2e-4,
+    batch_size=None,
+    grad_accum=None,
+    max_seq_len=None,
+    max_evidence_chars=None,
+    seed=7,
+    examples=None,
+    max_oom_retries=3,
+):
+    """LoRA SFT with hardware-aware config and OOM-retry.
+
+    Batch/seq/quantization default from recommended_sft_config (free VRAM +
+    model size). If training still OOMs, VRAM is freed and batch/seq are
+    reduced automatically until it fits or retries are exhausted.
+    """
+    from datasets import Dataset
+    from transformers import AutoTokenizer
+
+    free_gpu()
+    rec = recommended_sft_config(model_id)
+    batch_size = rec["batch_size"] if batch_size is None else batch_size
+    grad_accum = (max(1, 16 // batch_size)) if grad_accum is None else grad_accum
+    max_seq_len = rec["max_seq_len"] if max_seq_len is None else max_seq_len
+    max_evidence_chars = rec["max_evidence_chars"] if max_evidence_chars is None else max_evidence_chars
+    load_in_4bit = rec["load_in_4bit"]
+    free_gb, _, name = gpu_memory()
+    print(f"[run_sft] gpu={name} free={None if free_gb is None else round(free_gb,1)}GB "
+          f"-> batch={batch_size} grad_accum={grad_accum} seq={max_seq_len} "
+          f"evidence={max_evidence_chars} 4bit={load_in_4bit}")
+
+    output_dir = output_dir or f"groundfin_sft_{variant}_{model_id.split('/')[-1]}"
+    tokenizer = AutoTokenizer.from_pretrained(model_id)
+    if tokenizer.pad_token is None:
+        tokenizer.pad_token = tokenizer.eos_token
+
+    if examples is None:
+        examples = build_sft_examples(
+            train_df, variant=variant, max_evidence_chars=max_evidence_chars, seed=seed
+        )
+    leak = audit_sft_leakage(examples)
+    if len(leak):
+        print(f"[warn] {len(leak)} supported prompts contain the target answer; inspect audit_sft_leakage output.")
+    texts = [
+        _to_chat_text(tokenizer, p, c)
+        for p, c in zip(examples["prompt"], examples["completion"])
+    ]
+    dataset = Dataset.from_dict({"text": texts})
+
+    attempt = 0
+    while True:
+        try:
+            _sft_once(
+                dataset, model_id, output_dir, tokenizer,
+                epochs=epochs, lr=lr, batch_size=batch_size, grad_accum=grad_accum,
+                max_seq_len=max_seq_len, load_in_4bit=load_in_4bit, seed=seed,
+            )
+            print(f"Saved SFT adapter to {output_dir} (n_examples={len(examples)}).")
+            return output_dir
+        except Exception as err:
+            if not _is_oom(err):
+                raise
+            free_gpu()
+            attempt += 1
+            if attempt > max_oom_retries or (batch_size == 1 and max_seq_len <= 512):
+                print(f"[run_sft] OOM after {attempt} retries at batch={batch_size} seq={max_seq_len}; giving up.")
+                raise
+            if batch_size > 1:
+                batch_size = max(1, batch_size // 2)
+                grad_accum = max(1, 16 // batch_size)
+            else:
+                max_seq_len = max(512, int(max_seq_len * 0.75))
+            print(f"[run_sft] OOM caught; retrying with batch={batch_size} "
+                  f"grad_accum={grad_accum} seq={max_seq_len} (attempt {attempt}/{max_oom_retries}).")
 
 
 # ---------------------------------------------------------------------------
@@ -504,42 +634,23 @@ def build_grpo_dataset(train_df, max_evidence_chars=4000, seed=7):
     )
 
 
-def run_grpo(
-    train_df,
-    model_id="Qwen/Qwen2.5-0.5B-Instruct",
-    sft_adapter=None,
-    output_dir=None,
-    epochs=1,
-    lr=1e-5,
-    num_generations=4,
-    batch_size=2,
-    grad_accum=4,
-    max_prompt_len=1024,
-    max_completion_len=160,
-    max_evidence_chars=2500,
-    seed=7,
-):
+def _grpo_once(dataset, model_id, sft_adapter, output_dir, tokenizer, *, epochs, lr,
+               batch_size, grad_accum, num_generations, max_prompt_len,
+               max_completion_len, load_in_4bit, seed):
     import torch
     from peft import LoraConfig
-    from transformers import AutoModelForCausalLM, AutoTokenizer
+    from transformers import AutoModelForCausalLM
     from trl import GRPOConfig, GRPOTrainer
-
-    free_gpu()
-    output_dir = output_dir or f"groundfin_grpo_{model_id.split('/')[-1]}"
-    tokenizer = AutoTokenizer.from_pretrained(model_id)
-    if tokenizer.pad_token is None:
-        tokenizer.pad_token = tokenizer.eos_token
 
     dtype = torch.float16 if torch.cuda.is_available() else torch.float32
     load_kwargs = {"torch_dtype": dtype, "device_map": "auto"}
-    if pilot.auto_4bit(model_id) and torch.cuda.is_available():
+    if load_in_4bit and torch.cuda.is_available():
         from transformers import BitsAndBytesConfig
 
         load_kwargs["quantization_config"] = BitsAndBytesConfig(
             load_in_4bit=True, bnb_4bit_compute_dtype=torch.float16, bnb_4bit_quant_type="nf4",
         )
         load_kwargs.pop("torch_dtype", None)
-    # Always load the base model; attach the SFT LoRA adapter (trainable) if given.
     model = AutoModelForCausalLM.from_pretrained(model_id, **load_kwargs)
     model.config.use_cache = False
 
@@ -553,9 +664,6 @@ def run_grpo(
             r=16, lora_alpha=32, lora_dropout=0.05, bias="none", task_type="CAUSAL_LM",
             target_modules=["q_proj", "k_proj", "v_proj", "o_proj"],
         )
-
-    dataset = build_grpo_dataset(train_df, max_evidence_chars=max_evidence_chars, seed=seed)
-
     try:
         import bitsandbytes  # noqa: F401
 
@@ -580,17 +688,88 @@ def run_grpo(
         seed=seed,
     )
     trainer = GRPOTrainer(
-        model=model,
-        reward_funcs=groundfin_reward,
-        args=grpo_config,
-        train_dataset=dataset,
-        peft_config=peft_config,
+        model=model, reward_funcs=groundfin_reward, args=grpo_config,
+        train_dataset=dataset, peft_config=peft_config,
     )
     trainer.train()
     trainer.save_model(output_dir)
     tokenizer.save_pretrained(output_dir)
-    print(f"Saved GRPO model to {output_dir}.")
-    return output_dir
+    del trainer, model
+    free_gpu()
+
+
+def run_grpo(
+    train_df,
+    model_id="Qwen/Qwen2.5-0.5B-Instruct",
+    sft_adapter=None,
+    output_dir=None,
+    epochs=1,
+    lr=1e-5,
+    num_generations=None,
+    batch_size=None,
+    grad_accum=None,
+    max_prompt_len=1024,
+    max_completion_len=160,
+    max_evidence_chars=None,
+    seed=7,
+    max_oom_retries=3,
+):
+    """GRPO with hardware-aware config and OOM-retry (heavier than SFT: it also
+    samples num_generations completions per prompt, so it degrades batch and
+    then num_generations before giving up)."""
+    from transformers import AutoTokenizer
+
+    free_gpu()
+    rec = recommended_sft_config(model_id)
+    load_in_4bit = rec["load_in_4bit"]
+    max_evidence_chars = rec["max_evidence_chars"] if max_evidence_chars is None else max_evidence_chars
+    # GRPO is heavier than SFT; start one notch below the SFT batch.
+    if batch_size is None:
+        batch_size = max(1, rec["batch_size"] // 2) if rec["batch_size"] > 1 else 1
+    if num_generations is None:
+        num_generations = 4
+    if grad_accum is None:
+        grad_accum = max(1, num_generations // batch_size)
+
+    free_gb, _, name = gpu_memory()
+    print(f"[run_grpo] gpu={name} free={None if free_gb is None else round(free_gb,1)}GB "
+          f"-> batch={batch_size} grad_accum={grad_accum} num_gen={num_generations} "
+          f"4bit={load_in_4bit}")
+
+    output_dir = output_dir or f"groundfin_grpo_{model_id.split('/')[-1]}"
+    tokenizer = AutoTokenizer.from_pretrained(model_id)
+    if tokenizer.pad_token is None:
+        tokenizer.pad_token = tokenizer.eos_token
+    dataset = build_grpo_dataset(train_df, max_evidence_chars=max_evidence_chars, seed=seed)
+
+    attempt = 0
+    while True:
+        # keep effective batch divisible by num_generations (TRL requirement)
+        grad_accum = max(1, grad_accum)
+        try:
+            _grpo_once(
+                dataset, model_id, sft_adapter, output_dir, tokenizer,
+                epochs=epochs, lr=lr, batch_size=batch_size, grad_accum=grad_accum,
+                num_generations=num_generations, max_prompt_len=max_prompt_len,
+                max_completion_len=max_completion_len, load_in_4bit=load_in_4bit, seed=seed,
+            )
+            print(f"Saved GRPO model to {output_dir}.")
+            return output_dir
+        except Exception as err:
+            if not _is_oom(err):
+                raise
+            free_gpu()
+            attempt += 1
+            if attempt > max_oom_retries or (batch_size == 1 and num_generations <= 2):
+                print(f"[run_grpo] OOM after {attempt} retries; giving up.")
+                raise
+            if batch_size > 1:
+                batch_size = 1
+            else:
+                num_generations = max(2, num_generations - 2)
+            grad_accum = max(1, num_generations // batch_size)
+            print(f"[run_grpo] OOM caught; retrying with batch={batch_size} "
+                  f"num_gen={num_generations} (attempt {attempt}/{max_oom_retries}).")
 
 
 # ---------------------------------------------------------------------------

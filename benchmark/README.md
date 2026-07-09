@@ -1,6 +1,10 @@
 # Benchmark Workspace
 
-This folder contains artifacts for the FinanceBench pilot and the proposed FinGKD-Bench benchmark.
+This folder contains the FinanceBench pilot, Colab runner, task-typed evidence-bundle evaluation, and secondary SFT/GRPO experiments.
+
+The current recommended experiment is **Problem-Typed Evidence Bundle Eval** in `groundfin_colab_runner.ipynb` section **7d**. It tests the current paper hypothesis before any training:
+
+> FinanceBench reliability improves when raw evidence is converted into task-typed financial decision variables, not merely shortened into generic summaries.
 
 The staged experiment plan is here:
 
@@ -10,7 +14,7 @@ Pilot result notes are here:
 
 - `results_log.md`
 
-## Current Notebooks
+## Current Notebooks And Code
 
 - `groundfin_colab_runner.ipynb`: recommended stable Colab entry point.
 - `financebench_colab_pilot.ipynb`: fuller exploratory notebook.
@@ -20,7 +24,7 @@ Purpose:
 
 1. Load `PatronusAI/financebench` from Hugging Face.
 2. Inspect the open FinanceBench subset.
-3. Compare question-only vs gold-evidence prompting.
+3. Compare raw evidence, generic summaries, task-typed bundles, and oracle typed bundles.
 4. Identify examples suitable for counterfactual, missing-evidence, stale-evidence, and numeric perturbation splits.
 5. Export flattened pilot files for method experiments.
 
@@ -87,18 +91,51 @@ template_summary.csv
 template_results.csv
 ```
 
+## Problem-Typed Evidence Bundle Eval
+
+This is the current decision experiment.
+
+Section **7d** compares:
+
+- `raw_gold_evidence`,
+- `generic_summary`,
+- `task_typed_bundle`,
+- `oracle_typed_bundle`.
+
+Default smoke settings:
+
+```python
+PROBLEM_BUNDLE_READERS = ['Qwen/Qwen2.5-0.5B-Instruct']
+PROBLEM_BUNDLE_N = 5
+```
+
+It writes:
+
+```text
+problem_bundle_summary.csv
+problem_bundle_results.csv
+```
+
+The first pass/fail test is:
+
+```text
+task_typed_bundle > generic_summary > raw_gold_evidence
+```
+
+Do not spend more time on SFT/GRPO until this condition shows a useful signal.
+
 ## Immediate Pilot Goal
 
 Run enough examples to answer:
 
-> Does evidence-conditioned prompting substantially outperform question-only prompting, and do FinanceBench examples contain enough numeric/table structure to build counterfactual grounded-evidence tests?
+> Does a finance-specific task-typed evidence interface outperform generic compression and raw evidence for small readers?
 
 ## Success Signal
 
 The benchmark direction is promising if:
 
-- question-only answers are overconfident or unsupported,
-- gold-evidence answers improve but still fail on arithmetic or grounding,
+- `task_typed_bundle` beats `generic_summary`,
+- `oracle_typed_bundle` is high enough to prove the reader can use explicit variables,
 - numeric/table examples can be perturbed cleanly,
 - missing-evidence variants trigger hallucination or inappropriate guessing,
-- the open 150 examples are enough for a pilot, even if the final paper needs a larger generated/curated benchmark.
+- support/confidence metrics enable selective accuracy beyond full-coverage accuracy.

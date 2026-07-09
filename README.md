@@ -1,117 +1,286 @@
 # GROUNDFIN
 
-**GROUNDFIN: Grounded Probabilistic Distillation for Evidence-Conditioned Financial Reasoning**
+**GROUNDFIN** is a research project on reliable financial question answering from grounded evidence.
 
-GROUNDFIN is a research project on teaching smaller language models to make financial decisions from grounded external evidence rather than memorized parametric knowledge or answer-only teacher imitation.
+The project started as grounded probabilistic distillation, but early experiments changed the thesis. The current, measurement-first direction is:
 
-## Research Thesis
+> Small financial models fail mainly because they cannot extract the decision variables from long, noisy filings. They can often answer when the relevant financial variables are exposed explicitly. The central question is whether task-typed evidence bundles beat generic summaries and raw evidence before any training.
 
-Existing financial QA and agent benchmarks often measure whether a model gives the right answer. They do not fully test whether the answer is grounded in the evidence available to the model, calibrated to uncertainty, robust to counterfactual evidence, and able to abstain when evidence is missing, stale, or contradictory.
+## Current Hypothesis
 
-GROUNDFIN studies:
+**Task-Typed Evidence Bundles for Financial Decision Models**
+
+Financial QA is not just generic long-context QA. Correctness often depends on:
+
+- exact line item,
+- year or quarter,
+- unit,
+- sign convention,
+- numerator and denominator,
+- formula,
+- cash-flow category,
+- whether evidence is insufficient.
+
+The current hypothesis is:
 
 ```text
-Parametric decision:          P(y | x)
-Grounded decision:            P(y | x, e)
-Grounded distilled decision:  P(y | x, e, t)
+task_typed_bundle > generic_summary > raw_gold_evidence
 ```
 
-where:
+where `task_typed_bundle` is a no-leakage structured evidence object built from raw evidence only. It exposes the financial task type, required variables, candidate values, units, periods, answer rule, and support probability.
 
-- `x` is the question or decision task,
-- `e` is the grounded evidence bundle,
-- `t` is teacher supervision,
-- `y` is the answer or decision.
+The hypothesis is intentionally falsifiable. If `task_typed_bundle` does not beat `generic_summary`, this direction is not strong enough and we should not spend more time on SFT/GRPO.
 
-## Planned Papers
+## What We Already Learned
 
-### Method Paper
+Early Colab experiments on `PatronusAI/financebench` with `Qwen/Qwen2.5-0.5B-Instruct` showed:
 
-Working title:
+- Raw FinanceBench gold evidence did not improve parsed answer accuracy on the tiny baseline sample.
+- The same model performed much better on compact/direct/counterfactual evidence.
+- Generic probabilistic templates did not reliably improve deployment accuracy.
+- Naive SFT with abstention overfit to refusal and hurt supported-question accuracy.
 
-**Grounded Probabilistic Distillation for Evidence-Conditioned Decision Models**
+This killed the weak claim:
 
-Target direction: ACM KDD / ACM Web Conference / IEEE ICDM.
+```text
+generic probabilistic templates improve FinanceBench
+```
 
-Core contribution: a method for distilling grounded, calibrated, evidence-sensitive decision behavior from a larger teacher model into a smaller student model.
+The surviving signal is:
 
-### Benchmark Paper
+```text
+small models may be usable readers, but poor extractors
+```
 
-Working title:
+The next experiment tests whether a finance-specific evidence interface is the missing piece.
 
-**FinGKD-Bench: A Counterfactual Benchmark for Grounded Financial Decision Reasoning**
+## Main Experiment: Section 7d
 
-Target direction: ACM ICAIF / IEEE BigData / IEEE ICDM.
+The recommended next run is notebook section:
 
-Core contribution: a benchmark that tests whether financial models answer from evidence rather than memorized patterns by using counterfactual, missing-evidence, stale-evidence, and distractor-evidence splits.
+```text
+7d. Problem-Typed Evidence Bundle Eval
+```
+
+It compares four conditions:
+
+| Condition | Meaning |
+|---|---|
+| `raw_gold_evidence` | The original FinanceBench evidence text. |
+| `generic_summary` | Top evidence sentences by question overlap. |
+| `task_typed_bundle` | No-leakage finance-specific bundle built from raw evidence only. |
+| `oracle_typed_bundle` | Upper bound that intentionally includes the gold answer. Not a method claim. |
+
+The key pass/fail pattern:
+
+```text
+task_typed_bundle accuracy > generic_summary accuracy > raw_gold_evidence accuracy
+```
+
+Ideal stronger signal:
+
+```text
+task_typed_bundle closes 40-60% of the oracle_typed_bundle gap
+```
+
+## Task Types
+
+The current task taxonomy lives in `benchmark/financebench_pilot.py` as `TASK_SCHEMAS`.
+
+Initial task types:
+
+- `cash_flow_line_item`
+- `ratio_calculation`
+- `period_comparison`
+- `cash_flow_category_selection`
+- `guidance_delta`
+- `line_item_lookup`
+- `generic_financial_qa`
+
+Each schema defines required variables and an answer rule. Example:
+
+```json
+{
+  "task_type": "cash_flow_line_item",
+  "required_variables": ["line_item_label", "period", "value", "unit"],
+  "answer_rule": "For capital expenditure / capex, use purchases of property, plant and equipment (PP&E); report magnitude unless the question asks for sign."
+}
+```
 
 ## Repository Structure
 
 ```text
-benchmark/   FinanceBench pilot, FinGKD-Bench design, evaluation artifacts
-method/      Grounded probabilistic distillation theory and method notes
-paper/       Paper outlines, related work, figures, and drafts
+benchmark/   FinanceBench pilot, Colab runner, evaluation code, result logs
+method/      Method notes and theory sketches
+paper/       Abstracts, related work, adversarial review notes, paper drafts
 ```
 
-Experiment roadmap:
-
-[benchmark/experiment_stages.md](benchmark/experiment_stages.md)
-
-Core method schema:
-
-[method/probabilistic_template.md](method/probabilistic_template.md)
-
-## Current Pilot
-
-The recommended Colab entry point is:
+Important files:
 
 ```text
-benchmark/groundfin_colab_runner.ipynb
+benchmark/groundfin_colab_runner.ipynb   Recommended Colab entry point
+benchmark/financebench_pilot.py          Shared evaluation logic
+benchmark/train_groundfin.py             SFT/GRPO experiments, currently secondary
+benchmark/results_log.md                 Running notes from pilot experiments
+benchmark/experiment_stages.md           Older staged plan and controls
 ```
 
-It is a stable runner notebook. It clones or pulls the latest GitHub repo code, installs dependencies, and imports the Python pilot module. Most future fixes should happen in `.py` files, so Colab users can rerun the pull cell instead of replacing the notebook.
+## Reproducing On Colab
 
-Open in Colab:
+Open:
 
 [groundfin_colab_runner.ipynb](https://colab.research.google.com/github/Ashprakash/groundfin/blob/main/benchmark/groundfin_colab_runner.ipynb)
 
-The fuller exploratory notebook is:
-
-```text
-benchmark/financebench_colab_pilot.ipynb
-```
-
-Both notebooks use the same underlying pilot logic in:
-
-```text
-benchmark/financebench_pilot.py
-```
-
-The pilot loads `PatronusAI/financebench`, inspects the open FinanceBench subset, creates evidence-conditioned prompts, runs optional API baselines, and identifies candidate examples for counterfactual benchmark construction.
-
-## No API Key Baseline
-
-The runner notebook includes an open-model baseline that runs directly in Colab with Hugging Face models. No OpenAI API key is required.
-
-Recommended Colab runtime:
+Use:
 
 ```text
 Runtime -> Change runtime type -> T4 GPU
 ```
 
-Default pilot model:
+First cell:
+
+```python
+%cd /content
+!test -d groundfin/.git && git -C groundfin fetch --all && git -C groundfin reset --hard origin/main || git clone https://github.com/Ashprakash/groundfin.git
+%cd /content/groundfin
+!pip -q install -r requirements-colab.txt
+!git log --oneline -1
+```
+
+Then run:
+
+1. **Load FinanceBench**
+2. **7d. Problem-Typed Evidence Bundle Eval**
+
+Default smoke settings:
+
+```python
+PROBLEM_BUNDLE_READERS = ['Qwen/Qwen2.5-0.5B-Instruct']
+PROBLEM_BUNDLE_N = 5
+```
+
+The section writes:
+
+```text
+problem_bundle_summary.csv
+problem_bundle_results.csv
+```
+
+Paste or save the printed table:
+
+```text
+=== PROBLEM-TYPED BUNDLE SUMMARY ===
+```
+
+## Scaling Plan
+
+Do not run SFT/GRPO until Section 7d gives a useful signal.
+
+Run in this order:
+
+| Stage | Reader models | n | Purpose |
+|---|---|---:|---|
+| Smoke | Qwen 0.5B | 5 | Check code and table shape. |
+| Pilot | Qwen 0.5B | 30 | Check whether task bundles beat summaries. |
+| Capacity | Qwen 0.5B, Qwen 1.5B, Gemma small | 30-50 | Find reader capacity threshold. |
+| Stability | 2-3 readers, 2-3 seeds | 100+ | Paper-grade trend check. |
+
+Candidate readers:
 
 ```text
 Qwen/Qwen2.5-0.5B-Instruct
+Qwen/Qwen2.5-1.5B-Instruct
+Qwen/Qwen2.5-3B-Instruct
+google/gemma-2-2b-it or a comparable small Gemma instruction model
 ```
 
-This is intentionally small so the first baseline runs quickly. After the pipeline works, compare stronger students such as `Qwen/Qwen2.5-1.5B-Instruct` or `Qwen/Qwen2.5-3B-Instruct`.
+Use Qwen first for continuity, then add Gemma to show the effect is not model-family-specific.
 
-## Immediate Next Steps
+## Interpreting Results
 
-1. Rerun Stage 0 with parsed-answer scoring.
-2. Compare question-only versus gold-evidence prompting.
-3. Increase to 20 examples if the scoring is stable.
-4. Add missing-evidence and counterfactual-evidence variants.
-5. Generate teacher supervision bundles.
-6. Run first grounded-distillation baseline.
+Promising:
+
+```text
+task_typed_bundle > generic_summary > raw_gold_evidence
+oracle_typed_bundle is much higher than task_typed_bundle
+```
+
+This means:
+
+- the reader can use finance-specific variables,
+- generic compression is insufficient,
+- extraction quality is the next bottleneck.
+
+Not promising:
+
+```text
+task_typed_bundle <= generic_summary
+```
+
+This means the current bundle schema is not doing useful work yet. Improve task typing or stop this direction.
+
+Bad but useful:
+
+```text
+oracle_typed_bundle is low
+```
+
+This means the reader itself is too weak. Try 1.5B or 3B before changing the method.
+
+## Prior Work To Position Against
+
+The novelty is not "small models can solve FinanceBench." Relevant prior work includes:
+
+- **FinanceBench**: establishes the benchmark and shows that financial QA stresses retrieval, tabular reasoning, numeric reasoning, and hallucination.
+- **KodeX**: finance-specialized 8B/70B models using RAG-aware LoRA and synthetic financial QA; strong FinanceBench-relevant baseline.
+- **LiteCoST / structured-trace distillation**: close to the earlier template/distillation idea; motivates why generic structured traces are not enough as a novelty claim.
+
+Our possible contribution is narrower:
+
+> FinanceBench reliability improves when evidence is transformed into task-typed financial decision variables, not merely shortened or wrapped in generic traces.
+
+## Local Machine Notes
+
+An Apple Silicon machine such as an M4 Max / M5 Max with 64GB unified memory is useful for inference iteration:
+
+- prompt tests,
+- quantized model evaluation,
+- Qwen/Gemma reader sweeps,
+- cached evidence-bundle experiments.
+
+It is not a drop-in replacement for CUDA workflows:
+
+- `bitsandbytes`,
+- QLoRA via CUDA,
+- TRL/GRPO,
+- heavy PEFT training.
+
+For local Apple Silicon work, use MLX or llama.cpp/GGUF runners. The current repo's training code is CUDA/Colab-oriented, so local Apple Silicon support should be added as a separate runner rather than mixed into the Colab path.
+
+## Secondary Ideas
+
+### Delegated Reliability
+
+If task-typed bundles help, the next method is:
+
+```text
+strong extractor -> task-typed bundle + support probability -> small reader
+```
+
+Measure:
+
+- bundle accuracy vs raw evidence,
+- inherited support ECE vs reader verbal confidence ECE,
+- selective accuracy by support probability.
+
+### Decision-Preserving Quantization
+
+A second possible paper:
+
+> Domain-specific quantization calibration for financial decision models.
+
+This only becomes strong if experiments show that finance-calibrated quantization preserves numeric/sign/unit/year correctness better than generic quantization calibration.
+
+## Current Recommendation
+
+Run Section 7d first. Training and quantization should wait until the evidence-interface result is clear.

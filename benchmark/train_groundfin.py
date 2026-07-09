@@ -372,6 +372,25 @@ def _to_chat_text(tokenizer, prompt, completion):
     return f"{prompt}\n{completion}"
 
 
+def free_gpu():
+    """Release cached VRAM held by earlier generators/models in the session.
+
+    The eval/suite cells load pipelines that keep GPU memory cached; call this
+    before training so SFT/GRPO do not OOM on a T4.
+    """
+    try:
+        import gc
+
+        import torch
+
+        gc.collect()
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+            torch.cuda.reset_peak_memory_stats()
+    except Exception:
+        pass
+
+
 def run_sft(
     train_df,
     variant="answer_template_abstain",
@@ -379,10 +398,10 @@ def run_sft(
     output_dir=None,
     epochs=2,
     lr=2e-4,
-    batch_size=2,
-    grad_accum=8,
-    max_seq_len=1536,
-    max_evidence_chars=4000,
+    batch_size=1,
+    grad_accum=16,
+    max_seq_len=1024,
+    max_evidence_chars=2500,
     seed=7,
     examples=None,
 ):
@@ -392,6 +411,7 @@ def run_sft(
     from transformers import AutoModelForCausalLM, AutoTokenizer
     from trl import SFTConfig, SFTTrainer
 
+    free_gpu()
     output_dir = output_dir or f"groundfin_sft_{variant}_{model_id.split('/')[-1]}"
     tokenizer = AutoTokenizer.from_pretrained(model_id)
     if tokenizer.pad_token is None:
@@ -413,12 +433,28 @@ def run_sft(
     dataset = Dataset.from_dict({"text": texts})
 
     dtype = torch.float16 if torch.cuda.is_available() else torch.float32
-    model = AutoModelForCausalLM.from_pretrained(model_id, torch_dtype=dtype, device_map="auto")
+    load_kwargs = {"torch_dtype": dtype, "device_map": "auto"}
+    if pilot.auto_4bit(model_id) and torch.cuda.is_available():
+        from transformers import BitsAndBytesConfig
+
+        load_kwargs["quantization_config"] = BitsAndBytesConfig(
+            load_in_4bit=True, bnb_4bit_compute_dtype=torch.float16, bnb_4bit_quant_type="nf4",
+        )
+        load_kwargs.pop("torch_dtype", None)
+    model = AutoModelForCausalLM.from_pretrained(model_id, **load_kwargs)
+    model.config.use_cache = False  # required with gradient checkpointing
 
     peft_config = LoraConfig(
         r=16, lora_alpha=32, lora_dropout=0.05, bias="none", task_type="CAUSAL_LM",
         target_modules=["q_proj", "k_proj", "v_proj", "o_proj"],
     )
+    # 8-bit paged optimizer when bitsandbytes is available; keeps optimizer state small.
+    try:
+        import bitsandbytes  # noqa: F401
+
+        optim = "paged_adamw_8bit"
+    except Exception:
+        optim = "adamw_torch"
     sft_config = SFTConfig(
         output_dir=output_dir,
         num_train_epochs=epochs,
@@ -430,6 +466,9 @@ def run_sft(
         max_seq_length=max_seq_len,
         dataset_text_field="text",
         bf16=torch.cuda.is_available(),
+        optim=optim,
+        gradient_checkpointing=True,
+        gradient_checkpointing_kwargs={"use_reentrant": False},
         report_to="none",
         seed=seed,
     )
@@ -473,11 +512,11 @@ def run_grpo(
     epochs=1,
     lr=1e-5,
     num_generations=4,
-    batch_size=4,
+    batch_size=2,
     grad_accum=4,
     max_prompt_len=1024,
-    max_completion_len=192,
-    max_evidence_chars=4000,
+    max_completion_len=160,
+    max_evidence_chars=2500,
     seed=7,
 ):
     import torch
@@ -485,24 +524,44 @@ def run_grpo(
     from transformers import AutoModelForCausalLM, AutoTokenizer
     from trl import GRPOConfig, GRPOTrainer
 
+    free_gpu()
     output_dir = output_dir or f"groundfin_grpo_{model_id.split('/')[-1]}"
     tokenizer = AutoTokenizer.from_pretrained(model_id)
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
 
     dtype = torch.float16 if torch.cuda.is_available() else torch.float32
-    base = sft_adapter or model_id
-    model = AutoModelForCausalLM.from_pretrained(base, torch_dtype=dtype, device_map="auto")
+    load_kwargs = {"torch_dtype": dtype, "device_map": "auto"}
+    if pilot.auto_4bit(model_id) and torch.cuda.is_available():
+        from transformers import BitsAndBytesConfig
 
-    dataset = build_grpo_dataset(train_df, max_evidence_chars=max_evidence_chars, seed=seed)
+        load_kwargs["quantization_config"] = BitsAndBytesConfig(
+            load_in_4bit=True, bnb_4bit_compute_dtype=torch.float16, bnb_4bit_quant_type="nf4",
+        )
+        load_kwargs.pop("torch_dtype", None)
+    # Always load the base model; attach the SFT LoRA adapter (trainable) if given.
+    model = AutoModelForCausalLM.from_pretrained(model_id, **load_kwargs)
+    model.config.use_cache = False
 
     peft_config = None
-    if sft_adapter is None:
+    if sft_adapter:
+        from peft import PeftModel
+
+        model = PeftModel.from_pretrained(model, sft_adapter, is_trainable=True)
+    else:
         peft_config = LoraConfig(
             r=16, lora_alpha=32, lora_dropout=0.05, bias="none", task_type="CAUSAL_LM",
             target_modules=["q_proj", "k_proj", "v_proj", "o_proj"],
         )
 
+    dataset = build_grpo_dataset(train_df, max_evidence_chars=max_evidence_chars, seed=seed)
+
+    try:
+        import bitsandbytes  # noqa: F401
+
+        optim = "paged_adamw_8bit"
+    except Exception:
+        optim = "adamw_torch"
     grpo_config = GRPOConfig(
         output_dir=output_dir,
         num_train_epochs=epochs,
@@ -514,6 +573,9 @@ def run_grpo(
         max_completion_length=max_completion_len,
         logging_steps=5,
         bf16=torch.cuda.is_available(),
+        optim=optim,
+        gradient_checkpointing=True,
+        gradient_checkpointing_kwargs={"use_reentrant": False},
         report_to="none",
         seed=seed,
     )

@@ -63,15 +63,16 @@ conditions = question_only, with_gold_evidence
 
 Colab summary:
 
-| condition | weak_accuracy_raw | weak_accuracy_answer | numeric_accuracy_answer | refusal_rate | n |
-|---|---:|---:|---:|---:|---:|
-| question_only | 0.4 | 0.2 | 0.2 | 0.2 | 5 |
-| with_gold_evidence | 0.4 | 0.2 | 0.2 | 0.0 | 5 |
+| condition | weak_accuracy_raw | weak_accuracy_answer | numeric_accuracy_answer | refusal_rate | avg_confidence | brier_score | overconfident_wrong_rate | ece | n |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| question_only | 0.4 | 0.2 | 0.2 | 0.2 | 0.748 | 0.52052 | 0.6 | 0.548 | 5 |
+| with_gold_evidence | 0.4 | 0.2 | 0.2 | 0.0 | 0.935 | 0.65065 | 0.6 | 0.685 | 5 |
 
 Interpretation:
 
 - After stricter parsed-answer scoring, gold evidence did **not** improve answer accuracy for Qwen 0.5B on this tiny sample.
 - Gold evidence reduced abstention/refusal from `0.2` to `0.0`, but did not improve correctness.
+- Gold evidence increased average confidence from `0.748` to `0.935` while correctness stayed flat, worsening Brier score and ECE.
 - This suggests that merely adding long FinanceBench evidence is not enough for a very small model.
 
 Manual inspection:
@@ -97,24 +98,26 @@ Sample:
 
 ```text
 n = 3 numeric FinanceBench examples
-conditions = gold_evidence, missing_evidence, direct_grounded_evidence, counterfactual_direct_evidence
+conditions = gold_evidence, evidence_compressed, missing_evidence, direct_grounded_evidence, counterfactual_direct_evidence
 ```
 
 Colab summary:
 
-| condition | success_rate | answer_weak_accuracy | answer_numeric_accuracy | refusal_rate | n |
-|---|---:|---:|---:|---:|---:|
-| counterfactual_direct_evidence | 1.000 | 1.000 | 1.000 | 0.000 | 3 |
-| direct_grounded_evidence | 1.000 | 1.000 | 0.667 | 0.000 | 3 |
-| gold_evidence | 0.000 | 0.000 | 0.000 | 0.000 | 3 |
-| missing_evidence | 0.667 | 0.000 | 0.000 | 0.667 | 3 |
+| condition | success_rate | answer_weak_accuracy | answer_numeric_accuracy | refusal_rate | avg_confidence | brier_score | overconfident_wrong_rate | ece | n |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| counterfactual_direct_evidence | 1.000 | 1.000 | 1.000 | 0.000 | 0.980 | 0.000867 | 0.000 | 0.020 | 3 |
+| direct_grounded_evidence | 1.000 | 1.000 | 0.667 | 0.000 | 0.983 | 0.000833 | 0.000 | 0.017 | 3 |
+| evidence_compressed | 1.000 | 1.000 | 0.667 | 0.000 | 0.983 | 0.000833 | 0.000 | 0.017 | 3 |
+| gold_evidence | 0.000 | 0.000 | 0.000 | 0.000 | 0.947 | 0.897533 | 1.000 | 0.947 | 3 |
+| missing_evidence | 0.667 | 0.000 | 0.000 | 0.667 | 0.990 | 0.980100 | 0.333 | 0.990 | 3 |
 
 Interpretation:
 
-- The model can follow short direct evidence perfectly on this small probe.
+- The model can follow short direct evidence and compact evidence perfectly on this small probe.
 - The model can follow direct counterfactual evidence perfectly, which means it is not hopelessly stuck to memorized answers when evidence is concise and explicit.
 - The model fails real FinanceBench gold evidence completely on this sample.
 - The model abstains on missing evidence in 2 of 3 examples, but still hallucinates in 1 of 3.
+- The model is severely miscalibrated on raw gold evidence and missing evidence: confidence stays near `0.95-0.99` even when the answer behavior is unreliable.
 
 Research signal:
 
@@ -130,9 +133,10 @@ Next action:
 - Compare `gold_evidence` vs `evidence_compressed` vs `direct_grounded_evidence`.
 - If compressed evidence closes much of the gap, build the method around evidence-bundle distillation.
 
-Follow-up implementation:
+Method implication:
 
-- Added `evidence_compressed` to the grounding probe using FinanceBench `justification` as a compact evidence proxy where available.
+- `evidence_compressed` is an oracle/proxy condition, not a claim of solved retrieval or extraction.
+- The next research question is whether a reusable template format can reproduce this compressed-evidence benefit while also improving calibration, abstention, and counterfactual robustness over deterministic traces.
 
 ## Next: Template Reliability Comparison
 

@@ -7,3 +7,5 @@ openai
 transformers
 accelerate
 sentencepiece
+trl>=0.12,<0.16
+peft>=0.11

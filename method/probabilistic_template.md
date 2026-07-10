@@ -1,6 +1,8 @@
-# Probabilistic Evidence Template
+# Legacy Probabilistic Evidence Template
 
-This document defines the repeatable template at the center of GROUNDFIN.
+This document records the earlier probabilistic-template direction. The current project framing is **Grounded Execution Precision (GEP)**: typed extraction, deterministic execution, verification, and selective answer/abstain behavior.
+
+The template idea remains useful as background, but it is no longer the center of the method.
 
 ## Motivation
 

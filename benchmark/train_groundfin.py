@@ -1,4 +1,4 @@
-"""GROUNDFIN training: SFT + GRPO for risk-calibrated evidence templates.
+"""GEP training: SFT + GRPO for risk-calibrated evidence and execution traces.
 
 This module turns the prompt-time template probe into the actual method paper
 step. It builds supervised training examples from FinanceBench, LoRA-fine-tunes

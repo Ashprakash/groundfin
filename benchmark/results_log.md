@@ -123,7 +123,7 @@ Research signal:
 
 > The bottleneck is not simply that the small model cannot obey grounded evidence. The bottleneck is that real financial evidence is too noisy, long, and structurally complex for the small model to reliably extract the decision-relevant fact.
 
-This supports a sharper GROUNDFIN method hypothesis:
+This supports a sharper GEP method hypothesis:
 
 > Grounded probabilistic distillation should teach a student model not only the answer, but also a compact evidence representation, evidence support label, and abstention behavior.
 

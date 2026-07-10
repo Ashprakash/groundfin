@@ -1,1 +1,1 @@
-"""Benchmark utilities for GROUNDFIN."""
+"""Benchmark utilities for GEP."""

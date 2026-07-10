@@ -1,6 +1,8 @@
-# GROUNDFIN Experiment Protocol
+# GEP Experiment Protocol
 
-This document defines the staged experiment plan for GROUNDFIN.
+This document defines the staged experiment plan for **Grounded Execution Precision (GEP)**.
+
+Some older stages below refer to the previous probabilistic-template framing. The current paper direction is GEP: typed extraction, deterministic execution, verification, and selective answer/abstain behavior.
 
 The core research question is:
 
@@ -10,7 +12,7 @@ The core research question is:
 
 Raw financial evidence is often long, noisy, table-heavy, time-sensitive, and numerically fragile. Large models can sometimes brute-force this context. Small models usually cannot.
 
-GROUNDFIN tests whether the gap between small and large models is partly an **evidence representation gap**:
+GEP tests whether the gap between small and large models is partly an **evidence representation and execution gap**:
 
 ```text
 small model + raw evidence                         -> weak
@@ -315,7 +317,7 @@ Interpretation:
 
 > The model can obey concise grounded evidence, including counterfactual evidence, but fails to extract the correct answer from raw FinanceBench evidence.
 
-This is the first real support for the GROUNDFIN hypothesis.
+This is the first real support for the GEP hypothesis.
 
 Decision:
 
@@ -375,7 +377,7 @@ Decision:
 - If student-predicted templates work after distillation, we have the method-paper contribution.
 - If oracle templates work but teacher/rule templates fail, the contribution becomes an upper-bound benchmark result, not a method result.
 
-## Stage 6: Grounded Probabilistic Distillation
+## Stage 6: Legacy Distillation Stage
 
 Question:
 

@@ -1,10 +1,10 @@
 # Benchmark Workspace
 
-This folder contains the FinanceBench pilot, Colab runner, task-typed evidence-bundle evaluation, and secondary SFT/GRPO experiments.
+This folder contains the FinanceBench pilot, Colab runner, task-typed evidence-bundle evaluation, and secondary SFT/GRPO experiments for **Grounded Execution Precision (GEP)**.
 
 The current recommended experiment is **Problem-Typed Evidence Bundle Eval** in `groundfin_colab_runner.ipynb` section **7d**. It tests the current paper hypothesis before any training:
 
-> FinanceBench reliability improves when raw evidence is converted into task-typed financial decision variables, not merely shortened into generic summaries.
+> FinanceBench reliability improves when raw evidence is converted into task-typed financial decision variables and, eventually, auditable execution traces, not merely shortened into generic summaries.
 
 The staged experiment plan is here:
 
@@ -58,7 +58,7 @@ Qwen/Qwen2.5-0.5B-Instruct
 
 ## Grounding Probe
 
-The runner notebook includes a **Grounding Probe** section that directly tests the core GROUNDFIN idea:
+The runner notebook includes a **Grounding Probe** section that directly tests the core GEP diagnostic:
 
 - Can the model use gold evidence?
 - Does compact evidence help more than raw evidence?

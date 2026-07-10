@@ -1,6 +1,8 @@
-# GROUNDFIN
+# GEP
 
-**GROUNDFIN** is a research project on reliable financial question answering from grounded evidence.
+**Grounded Execution Precision (GEP)** is a research project on reliable financial question answering from grounded evidence.
+
+The repository is still named `groundfin` for continuity with the existing GitHub/Colab workflow, but the research framing has moved to **GEP**.
 
 The project started as grounded probabilistic distillation, but early experiments changed the thesis. The current, measurement-first direction is:
 
@@ -8,9 +10,9 @@ The project started as grounded probabilistic distillation, but early experiment
 
 ## Current Hypothesis
 
-**Task-Typed Evidence Bundles for Financial Decision Models**
+**Grounded Execution Precision for Financial Decision Models**
 
-Financial QA is not just generic long-context QA. Correctness often depends on:
+GEP treats financial QA as an auditable execution problem rather than an end-to-end RAG generation problem. Correctness often depends on:
 
 - exact line item,
 - year or quarter,
@@ -21,7 +23,7 @@ Financial QA is not just generic long-context QA. Correctness often depends on:
 - cash-flow category,
 - whether evidence is insufficient.
 
-The current hypothesis is:
+The current pre-training hypothesis is:
 
 ```text
 task_typed_bundle > generic_summary > raw_gold_evidence
@@ -30,6 +32,16 @@ task_typed_bundle > generic_summary > raw_gold_evidence
 where `task_typed_bundle` is a no-leakage structured evidence object built from raw evidence only. It exposes the financial task type, required variables, candidate values, units, periods, answer rule, and support probability.
 
 The hypothesis is intentionally falsifiable. If `task_typed_bundle` does not beat `generic_summary`, this direction is not strong enough and we should not spend more time on SFT/GRPO.
+
+The stronger GEP method adds a deterministic execution boundary:
+
+```text
+raw evidence + question
+  -> typed variable/formula extraction
+  -> deterministic execution
+  -> verification/confidence signal
+  -> answer or abstain
+```
 
 ## What We Already Learned
 
@@ -52,7 +64,7 @@ The surviving signal is:
 small models may be usable readers, but poor extractors
 ```
 
-The next experiment tests whether a finance-specific evidence interface is the missing piece.
+The next experiment tests whether a finance-specific evidence interface and execution boundary are the missing pieces.
 
 ## Main Experiment: Section 7d
 
@@ -261,7 +273,7 @@ For local Apple Silicon work, use MLX or llama.cpp/GGUF runners. The current rep
 
 ### Delegated Reliability
 
-If task-typed bundles help, the next method is:
+If task-typed bundles help, the next GEP method is:
 
 ```text
 strong extractor -> task-typed bundle + support probability -> small reader

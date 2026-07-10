@@ -2,7 +2,7 @@
 
 Working title:
 
-**Grounded Probabilistic Templates for Evidence-Conditioned Decision Models**
+**Legacy Evidence Templates for Evidence-Conditioned Decision Models**
 
 Target venue:
 
@@ -48,14 +48,14 @@ The goal is to teach the student to rely on a repeatable template `z` when the a
 
 Name candidates:
 
-- Grounded Probabilistic Distillation, GPD
+- Grounded Execution Precision, GEP
 - Evidence-Conditioned Distillation, ECD
 - Grounded Knowledge Distillation, GKD
 - Probabilistic Evidence Distillation, PED
 
 Current favorite:
 
-**Grounded Probabilistic Templates (GP-Template) + Grounded Probabilistic Distillation (GPD)**
+**Grounded Execution Precision (GEP)**
 
 Teacher produces a structured supervision bundle:
 
@@ -94,7 +94,7 @@ The method paper needs a benchmark that makes ordinary distillation look insuffi
 Use or adapt:
 
 - FinanceBench as a known existing benchmark.
-- FinGKD-Bench as our counterfactual extension.
+- GEP-Bench as our counterfactual extension.
 
 Required benchmark splits:
 
@@ -130,7 +130,7 @@ Minimum baselines:
 - Student chain-of-thought or rationale-distilled from teacher.
 - Student calibrated with temperature scaling.
 - Teacher model.
-- Our GPD method.
+- Our GEP method.
 
 Optional stronger baselines:
 
@@ -182,13 +182,13 @@ Gap recovery = (student_method - student_baseline) / (teacher - student_baseline
 ## Experiments Needed
 
 1. **Known benchmark win**
-   Show GPD improves over baselines on FinanceBench-style tasks.
+   Show GEP improves over baselines on FinanceBench-style tasks.
 
 2. **New benchmark diagnosis**
-   Show existing methods that score well on original tasks fail on FinGKD counterfactual splits.
+   Show existing methods that score well on original tasks fail on GEP-Bench counterfactual splits.
 
 3. **Teacher-student gap recovery**
-   Quantify how much performance gap GPD recovers.
+   Quantify how much performance gap GEP recovers.
 
 4. **Calibration study**
    Compare confidence quality across methods.
@@ -210,9 +210,9 @@ Gap recovery = (student_method - student_baseline) / (teacher - student_baseline
 Likely contribution list:
 
 1. A probabilistic framework for distinguishing parametric decisions from grounded evidence-conditioned decisions.
-2. Grounded Probabilistic Distillation, a multi-signal teacher-student method for evidence-conditioned decision models.
+2. Grounded Execution Precision, a typed extraction and deterministic execution method for evidence-conditioned decision models.
 3. A counterfactual financial decision benchmark that tests whether models use evidence rather than memorized patterns.
-4. Empirical evidence that GPD improves accuracy, calibration, abstention, and robustness over answer-only distillation and naive RAG.
+4. Empirical evidence that GEP improves accuracy, calibration, abstention, and robustness over answer-only distillation and naive RAG.
 
 ## Risks
 
@@ -234,7 +234,7 @@ Likely contribution list:
 
 1. Finalize method name and mathematical framing.
 2. Choose existing benchmark to beat, likely FinanceBench.
-3. Define FinGKD-Bench schema and data generation procedure.
+3. Define GEP-Bench schema and data generation procedure.
 4. Build a small pilot dataset, around 100-300 examples.
 5. Run baseline evaluations with one teacher and one student.
 6. Validate whether counterfactual splits expose failures.
@@ -243,7 +243,7 @@ Likely contribution list:
 
 ## Open Questions
 
-- Should GPD be a fine-tuning method, an inference-time method, or both?
+- Should GEP be a fine-tuning method, an inference-time method, or both?
 - Can we make the probabilistic theory precise enough to feel like more than engineering?
 - What is the cheapest reproducible student/teacher pair that still shows a meaningful gap?
 - How much human validation do we need for benchmark credibility?
